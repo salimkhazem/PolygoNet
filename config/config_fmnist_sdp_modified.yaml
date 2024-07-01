@@ -1,0 +1,29 @@
+--- 
+TrainDataset:
+  cls: "FashionMNISTSDP"
+  args:
+    dir_path: "/home/salimkhazem/ssd1To/datasets/FashionMnist/MNIST_sdp_dp/data" 
+    resize: 512
+    aug_prob: 0.0
+
+ValidDataset:
+  fromsplit: 0.1
+
+Data:
+  Batch_size: 64
+  Shuffle: True 
+
+Model: 
+  Name: "SP-FMNIST_SDP"
+
+Training: 
+  Epochs: 500
+  SEED: 2023
+  Dropout: 0
+Optimizer: 
+  Name: "AdamW"
+  lr: 0.000001
+  weight_decay: 0.1
+
+Loss: 
+  Name: "CrossEntropyLoss"
