@@ -11,7 +11,7 @@
 </p> 
 
 ## Dependencies 
-For the different parts you can install required dependecies by running the following command: 
+For the different parts you can install required dependencies by running the following command: 
 
 ### For MATC
   #### Install in local 
