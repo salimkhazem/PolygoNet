@@ -1,7 +1,7 @@
 ## PolygoNet: Leveraging Polygonal Contours For Efficient Image Classification with deep neural network
 
 <p align="center"> 
-  <img src="![Preprocessing_pipeline_final](diagram/preprocessing.png)" width="480">
+  <img src="diagram/preprocessing.png" width="480">
 </p> 
 
 ## Dependencies 
