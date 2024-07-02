@@ -253,12 +253,3 @@ class FolioSDP:
         }
 
 
-if __name__ == "__main__":
-    data = FashionMNISTSDP(
-        "/home/salimkhazem/ssd1To/datasets/FashionMnist/MNIST_sdp_dp_modified_backup/train/"
-    )
-    print(data[0]["input"].shape, data[0]["target"])
-    data = FlaviaDatasetSDP(
-        "/home/salimkhazem/ssd1To/datasets/Flavia/MATC_Flavia_new/MATC_Flavia_all/"
-    )
-    print(data[0]["input"].shape, data[0]["target"])
