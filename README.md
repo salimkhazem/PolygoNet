@@ -1,8 +1,8 @@
 ## PolygoNet: Leveraging Polygonal Contours For Efficient Image Classification with deep neural network
 
 <p align="center"> 
-  <img src="![Preprocessing_pipeline_final](https://github.com/salimkhazem/PolygoNet/assets/26838474/12361bb6-7579-4108-9361-c28b68969966)" width="480">
-    </p> 
+  <img src="![Preprocessing_pipeline_final](diagram/preprocessing.png)" width="480">
+</p> 
 
 ## Dependencies 
 For the different parts you can install required dependecies by running the following command: 
