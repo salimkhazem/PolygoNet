@@ -14,5 +14,7 @@ For the different parts you can install required dependecies by running the foll
   ```bash
   pip install -r requirements.txt 
   ````
-
-
+## Usage 
+### Contours extraction and SDP files generation 
+```bash
+python3 data/generate_sdp.py INPUT_PATH OUTPUT_PATH
