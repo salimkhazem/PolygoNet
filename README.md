@@ -15,6 +15,7 @@ For the different parts you can install required dependecies by running the foll
   pip install -r requirements.txt 
   ````
 ## Usage 
-### Contours extraction and SDP files generation 
+### Contours extraction and SDP files generation
+`INPUT_PATH` is the path to the folder containing the images. `OUTPUT_PATH` is the path to the folder where the SDP files will be saved. 
 ```bash
 python3 data/generate_sdp.py INPUT_PATH OUTPUT_PATH
