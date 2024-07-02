@@ -2,7 +2,7 @@
 TrainDataset:
   cls: "FlaviaDatasetSDP"
   args:
-    dir_path: "/home/GPU/skhazem/Spline-pipeline/spline-attention/data/Flavia_simple_sdp/"
+    dir_path: "./dataset/Flavia/Flavia_simple_sdp/"
     resize: 512
     aug_prob: 0.4
 
@@ -17,13 +17,13 @@ Model:
   Name: "SP-FlaviaSDP"
 
 Training: 
-  Epochs: 500
+  Epochs: 300
   SEED: 2023
   Dropout: 0
 Optimizer: 
-  Name: "AdamW"
-  lr: 0.000001
-  weight_decay: 0.00001
+  Name: "Adam"
+  lr: 0.00001
+  weight_decay: 0.0001
 
 Loss: 
   Name: "CrossEntropyLoss"

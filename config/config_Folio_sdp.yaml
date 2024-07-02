@@ -2,7 +2,7 @@
 TrainDataset:
   cls: "FolioSDP"
   args:
-    dir_path: "/home/salimkhazem/ssd1To/datasets/Folio/MATC_Folio"
+    dir_path: "./dataset/Folio/MATC_Folio"
     resize: 512
     aug_prob: 0.0
 
@@ -17,13 +17,13 @@ Model:
   Name: "SP-FolioSDP"
 
 Training: 
-  Epochs: 500
+  Epochs: 300
   SEED: 2023
   Dropout: 0
 Optimizer: 
-  Name: "AdamW"
-  lr: 0.000001
-  weight_decay: 0.1
+  Name: "Adam"
+  lr: 0.00001
+  weight_decay: 0.0001
 
 Loss: 
   Name: "CrossEntropyLoss"
