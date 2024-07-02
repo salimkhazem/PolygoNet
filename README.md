@@ -1,7 +1,13 @@
 ## PolygoNet: Leveraging Polygonal Contours For Efficient Image Classification with deep neural network
 
+## Preprocessing Pipeline 
 <p align="center"> 
-  <img src="diagram/preprocessing.png" width="480">
+  <img src="diagram/preprocessing.png" width="620">
+</p> 
+
+## PolygoNet Architecture 
+<p align="center"> 
+  <img src="diagram/polygonet.png" width="620">
 </p> 
 
 ## Dependencies 
