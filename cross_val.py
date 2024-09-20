@@ -43,6 +43,11 @@ def collate_fn(samples):
     padded_label = torch.tensor(labels)
     return {"input": padded_data, "target": padded_label}
 
+def collate_fn_reconstruct(batch):
+    masks = [item["mask"] for item in batch]
+    inputs = [item["input"] for item in batch]
+    coords = [item["coord"] for item in batch]
+    return {'mask': masks, 'input': inputs, 'coord': coords} 
 
 def save_metrics_to_csv(metrics, filepath="accuracies.csv"):
     df = pd.DataFrame([metrics])
