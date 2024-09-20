@@ -44,7 +44,11 @@ def get_optimizer(cfg, model):
 def get_criterion(cfg):
     if cfg["Loss"]["Name"] == "CrossEntropyLoss":
         criterion = nn.CrossEntropyLoss()
-    return criterion
+        return criterion
+    elif cfg["Loss"]["Name"] == "MSECE": 
+        criterion_coord = nn.MSELoss() 
+        criterion_mask = nn.CrossEntropyLoss() 
+        return criterion_mask, criterion_coord
 
 
 def seed_torch(seed=42):
