@@ -1,4 +1,5 @@
 import os
+import cv2 
 import torch
 import numpy as np
 
@@ -56,7 +57,7 @@ class FlaviaDatasetSDP:
     def random_rotation(self, control_points):
         angle = np.random.uniform(
             -45, 45
-        )  # You can adjust the range of rotation
+        )  
         rotation_matrix = np.array(
             [
                 [np.cos(np.radians(angle)), -np.sin(np.radians(angle))],
@@ -73,6 +74,32 @@ class FlaviaDatasetSDP:
 
     def __len__(self):
         return len(self.files_path)
+    
+    def filter_points(self, x, y, threshold=5):
+        x = x[x > threshold]
+        y = y[y > threshold] 
+        return x, y 
+
+    def generate_gt(self, points, idx):  
+        x = points[:, 0]
+        y = points[:, 1]
+        x, y = self.filter_points(x, y, 10)
+        img_height = int(max(y)) + 10
+        img_width = int(max(x)) + 10
+        img = np.zeros((img_height, img_width), dtype=np.uint8)
+        points = np.array([list(zip(x.astype(int), y.astype(int)))])
+        cv2.polylines(img, [points], isClosed=True, color=255, thickness=1)
+
+        seed_x = int(np.mean(x)) #- 5
+        seed_y = int(np.mean(y)) #- 5 
+        mask = np.zeros((img_height + 2, img_width + 2), dtype=np.uint8)
+        cv2.floodFill(img, mask, seedPoint=(seed_x, seed_y), newVal=255)
+        max_length = max(len(x), len(y))
+
+        x = np.pad(x, (0, max_length - len(x)), mode='edge')
+        y = np.pad(y, (0, max_length - len(y)), mode='edge')
+        coord = np.vstack((x, y)).T
+        return torch.from_numpy(mask), torch.from_numpy(coord) 
 
     def normalize(self, control_points):
         mean = np.mean(control_points, axis=0)
@@ -86,7 +113,6 @@ class FlaviaDatasetSDP:
                 for line in file.readlines()
                 if line.strip() and not line.startswith("#")
             ]
-            # Assuming each non-commented line represents a point with x and y coordinates
             try:
                 points = [tuple(map(float, line.split())) for line in lines]
             except:
@@ -96,12 +122,12 @@ class FlaviaDatasetSDP:
 
         label = int(self.labels[idx])
         if np.random.rand() < self.aug_prob:
-            # spline_pts = self.random_noise(spline_pts, 2)
-            # spline_pts = self.random_flip(spline_pts)
             spline_pts = self.random_rotation(spline_pts)
+        gt_mask, gt_coord = self.generate_gt(spline_pts, idx)
         return {
             "input": torch.tensor(spline_pts, dtype=torch.float),
-            "target": torch.tensor(label, dtype=torch.long),
+            "mask": gt_mask,
+            "coord": gt_coord
         }
 
 
@@ -132,6 +158,32 @@ class FashionMNISTSDP:
     def __len__(self):
         return len(self.files_path)
 
+    def filter_points(self, x, y, threshold=5):
+        x = x[x > threshold]
+        y = y[y > threshold] 
+        return x, y 
+
+    def generate_gt(self, points, idx):  
+        x = points[:, 0]
+        y = points[:, 1]
+        x, y = self.filter_points(x, y, 0)
+        img_height = int(max(y)) + 10
+        img_width = int(max(x)) + 10
+        img = np.zeros((img_height, img_width), dtype=np.uint8)
+        points = np.array([list(zip(x.astype(int), y.astype(int)))])
+        cv2.polylines(img, [points], isClosed=True, color=255, thickness=1)
+
+        seed_x = int(np.mean(x)) #- 5
+        seed_y = int(np.mean(y)) #- 5 
+        mask = np.zeros((img_height + 2, img_width + 2), dtype=np.uint8)
+        cv2.floodFill(img, mask, seedPoint=(seed_x, seed_y), newVal=255)
+
+        max_length = max(len(x), len(y))
+        x = np.pad(x, (0, max_length - len(x)), mode='edge')
+        y = np.pad(y, (0, max_length - len(y)), mode='edge')
+        coord = np.vstack((x, y)).T
+        return torch.from_numpy(mask), torch.from_numpy(coord) 
+    
     def random_noise(self, control_points, noise_factor=0.01):
         noise = np.random.normal(0, noise_factor, control_points.shape)
         return control_points + noise
@@ -171,9 +223,16 @@ class FashionMNISTSDP:
         if np.random.rand() < self.aug_prob:
             spline_pts = self.random_noise(spline_pts, 2)
             # spline_pts = self.random_rotation(spline_pts)
+        x_filtered, y_filtered = self.filter_points(np.array(x), np.array(y), 1)
+        max_length = max(len(x_filtered), len(y_filtered))
+        x_filtered = np.pad(x_filtered, (0, max_length - len(x_filtered)), mode='edge')
+        y_filtered = np.pad(y_filtered, (0, max_length - len(y_filtered)), mode='edge')
+        padded_input = np.column_stack((x_filtered, y_filtered))
+        gt_mask, gt_coord = self.generate_gt(spline_pts, idx)
         return {
             "input": torch.tensor(spline_pts, dtype=torch.float),
-            "target": torch.tensor(label, dtype=torch.long),
+            "mask": gt_mask,
+            "coord": torch.tensor(spline_pts, dtype=torch.float)
         }
 
 
@@ -208,6 +267,32 @@ class FolioSDP:
     def __len__(self):
         return len(self.samples)
 
+    def filter_points(self, x, y, threshold=5):
+        x = x[x > threshold]
+        y = y[y > threshold] 
+        return x, y 
+
+    def generate_gt(self, points, idx):  
+        x = points[:, 0]
+        y = points[:, 1]
+        x, y = self.filter_points(x, y, 10)
+        img_height = int(max(y)) + 10
+        img_width = int(max(x)) + 10
+        img = np.zeros((img_height, img_width), dtype=np.uint8)
+        points = np.array([list(zip(x.astype(int), y.astype(int)))])
+        cv2.polylines(img, [points], isClosed=True, color=255, thickness=1)
+
+        seed_x = int(np.mean(x)) #- 5
+        seed_y = int(np.mean(y)) #- 5 
+        mask = np.zeros((img_height + 2, img_width + 2), dtype=np.uint8)
+        cv2.floodFill(img, mask, seedPoint=(seed_x, seed_y), newVal=255)
+        max_length = max(len(x), len(y))
+
+        x = np.pad(x, (0, max_length - len(x)), mode='edge')
+        y = np.pad(y, (0, max_length - len(y)), mode='edge')
+        coord = np.vstack((x, y)).T
+        return torch.from_numpy(mask), torch.from_numpy(coord) 
+    
     def random_noise(self, control_points, noise_factor=0.01):
         noise = np.random.normal(0, noise_factor, control_points.shape)
         return control_points + noise
@@ -247,9 +332,57 @@ class FolioSDP:
         if np.random.rand() < self.aug_prob:
             # spline_pts = self.random_noise(spline_pts, 2)
             spline_pts = self.random_rotation(spline_pts)
+        gt_mask, gt_coord = self.generate_gt(spline_pts, idx)
         return {
             "input": torch.tensor(spline_pts, dtype=torch.float),
-            "target": torch.tensor(label, dtype=torch.long),
+            "mask": gt_mask,
+            "coord": gt_coord
         }
+    
+def collate_fn(batch):
+    masks = [item["mask"] for item in batch]
+    inputs = [item["input"] for item in batch]
+    coords = [item["coord"] for item in batch]
+    return {'mask': masks, 'input': inputs, 'coord': coords} 
+
+def test_loader(): 
+    print("----------- Testing Flavia -----------")
+    path_flavia = "/home/salimkhazem/workspace/phd_thesis/experience_processing_time_contours/results_contours/data/Flavia/Flavia_sdp_None" 
+    dataset = FlaviaDatasetSDP(path_flavia) 
+    loader =  torch.utils.data.DataLoader(dataset, 16, collate_fn=collate_fn, shuffle=True)
+    for data in loader: 
+        inputs = data['input']
+        masks = data['mask']  
+        coords = data['coord']
+        for i in range(len(inputs)):
+            print(f"Sample {i}: Input: {inputs[i].shape} | Mask: {masks[i].shape} | Coord: {coords[i].shape}")
+        break
+    #plt.imshow(masks[5], cmap="gray")
+    #plt.plot(inputs[5][:, 0], inputs[5][:, 1], "r")
+    #plt.savefig(f"flavia_test.png", dpi=300)
+    print("\n----------- Testing FashionMNIST -----------")
+    path_fmnist = "/home/salimkhazem/workspace/phd_thesis/experience_processing_time_contours/results_contours/data/Fmnist/SIMPLE/train_sdp_SIMPLE" 
+    dataset = FashionMNISTSDP(path_fmnist) 
+    loader =  torch.utils.data.DataLoader(dataset, 16, collate_fn=collate_fn, shuffle=True)
+    for data in loader: 
+        inputs_ = data['input']
+        masks_ = data['mask']  
+        coords_ = data['coord']
+        for i in range(len(inputs)):
+            print(f"Sample {i}: Input: {inputs_[i].shape} | Mask: {masks_[i].shape} | Coord: {coords_[i].shape}")
+        break
+    plt.clf()
+    plt.imshow(masks_[5], cmap="gray")
+    plt.plot(inputs_[5][:, 0], inputs_[5][:, 1], "r")
+    plt.savefig(f"Fmnist_test.png", dpi=300)
+
+
+
+if __name__ == "__main__": 
+    import matplotlib.pyplot as plt 
+    test_loader()    
+
+
+
 
 
