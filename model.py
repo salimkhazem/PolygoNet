@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from attention import SplineAttention
 from multiheadattention import SplineMultiHead
 
 
@@ -25,7 +24,7 @@ class DeepNetwork(nn.Module):
             input_size, num_heads, d_k=d_k, out_size=out_size, batch_first=True
         )
         self.use_positional_encoding = use_positional_encoding
-        self.pos_encoding = self.positional_encoding_2d(512, 2)
+        self.pos_encoding = self.positional_encoding_2d(8048, 2)
         self.requires_grad = requires_grad
         if self.requires_grad:
             self.pos_encoding = nn.Parameter(
@@ -66,7 +65,7 @@ class DeepNetwork(nn.Module):
             nn.ReLU(inplace=True),
 
             nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1, output_padding=1),
-            nn.ReLU(inplace=True),  # Assuming you want the output image values between 0 and 1
+            nn.ReLU(inplace=True),  
             nn.BatchNorm2d(64),
 
             nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1),
@@ -92,15 +91,6 @@ class DeepNetwork(nn.Module):
             nn.ConvTranspose1d(256, 128, 3, padding=1),
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
-
-
-            # nn.ConvTranspose1d(128, 64, 3, padding=1),
-            # nn.BatchNorm1d(64),
-            # nn.ReLU(inplace=True),
-
-            # nn.ConvTranspose1d(64, 32, 3, padding=1),
-            # nn.BatchNorm1d(32),
-            # nn.ReLU(inplace=True),
         )
 
         self.output = nn.Sequential(
@@ -126,10 +116,8 @@ class DeepNetwork(nn.Module):
             x = x + self.pos_encoding[:N, :].to(x.device).unsqueeze(0)
         out1, out2 = self.attention(x)
         out1 = out1.view(BS, self.out_size, -1) 
-        #print(f"Output attention: {out1.shape}")
         out_cnn = self.encoder(out1)
         out_coord = out_cnn
-        #print(f"Output encoder: {out_cnn.shape}")
         BS, C, L = out_cnn.size()
         H = W = int(np.ceil(np.sqrt(L)))
         if H * W > L:
@@ -145,23 +133,15 @@ class DeepNetwork(nn.Module):
         elif out_decoder_coord.size(1) < N:
             padding = torch.zeros(BS, N - out_decoder_coord.size(1), 2).to(out_decoder_coord.device)
             out_decoder_coord = torch.cat([out_decoder_coord, padding], dim=1)
-
-        print(f"Output decoder Coord: {out_decoder_coord.shape}")
-        print(f"Output decoder Mask: {out_decoder_mask.shape}")
-        return out_decoder_mask
-
-        # out_cnn = self.conv(out1.view(BS, self.out_size, -1))
-        # print(f"Output encoder: {out_cnn.shape}") 
-        # out_decoder = self.decoder(out_cnn) 
-        # print(f"Output decoder: {out_decoder.view(BS, -1, 2).shape}") 
-        # # output = self.output(out_cnn.view(BS, -1))
-        # return out_decoder
+        return out_decoder_mask, out_decoder_coord
 
 
 if __name__ == "__main__":
     model = DeepNetwork(requires_grad=True).to(torch.device("cuda"))
     x1 = torch.randn(64, 300, 2).to(torch.device("cuda"))
     x2 = torch.randn(64, 256, 2).to(torch.device("cuda"))
-    print(f"Input Shape: X1: {x1.shape}, X2: {x2.shape}")
-    out_1 = model(x1)
-    out_2 = model(x2)
+    out_1_mask, out_1_coord = model(x1)
+    out_2_mask, out_2_coord = model(x2)
+    print(f"Input: {x1.shape} ---> Coord: ({out_1_coord.shape}) | Mask: ({out_1_mask.shape})")
+    print(f"Input: {x2.shape} ---> Coord: ({out_2_coord.shape}) | Mask: ({out_2_mask.shape})")
+    print("---------------------")
