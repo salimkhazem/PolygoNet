@@ -3,7 +3,7 @@
 ## Preprocessing Pipeline 
 ### Contours 
 <p align="center"> 
-  <img src="diagram/Preprocessing_contours.png" width="620">
+  <img src="diagram/Preprocessing_contours.png" width="520">
 </p> 
 
 ### MATC Dominant points
