@@ -4,6 +4,10 @@
 <p align="center"> 
   <img src="diagram/preprocessing.png" width="620">
 </p> 
+<p align="center"> 
+  <img src="diagram/Preprocessing_pipeline_contours.pdf" width="620">
+</p> 
+
 
 ## PolygoNet Architecture 
 <p align="center"> 
