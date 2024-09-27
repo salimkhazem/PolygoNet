@@ -1,12 +1,16 @@
 ## PolygoNet: Leveraging Polygonal Contours For Efficient Image Classification with deep neural network
 
 ## Preprocessing Pipeline 
-<p align="center"> 
-  <img src="diagram/preprocessing.png" width="620">
-</p> 
+### Contours 
 <p align="center"> 
   <img src="diagram/Preprocessing_contours.png" width="620">
 </p> 
+
+### MATC Dominant points
+<p align="center"> 
+  <img src="diagram/preprocessing.png" width="620">
+</p> 
+
 
 
 ## PolygoNet Architecture 
