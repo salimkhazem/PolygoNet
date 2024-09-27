@@ -5,7 +5,7 @@
   <img src="diagram/preprocessing.png" width="620">
 </p> 
 <p align="center"> 
-  <img src="diagram/Preprocessing_pipeline_contours.pdf" width="620">
+  <img src="diagram/Preprocessing_contours.png" width="620">
 </p> 
 
 
