@@ -47,7 +47,7 @@ def get_criterion(cfg):
         return criterion
     elif cfg["Loss"]["Name"] == "MSECE": 
         criterion_coord = nn.MSELoss() 
-        criterion_mask = nn.CrossEntropyLoss() 
+        criterion_mask = nn.BCEWithLogitsLoss()
         return criterion_mask, criterion_coord
 
 
