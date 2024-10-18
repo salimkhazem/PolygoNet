@@ -33,51 +33,54 @@ class DeepNetwork(nn.Module):
         dummy_tensor = torch.randn(64, 256, 2)
         out, _ = self.attention(dummy_tensor)
         out_dim = out.shape[1]
+        # print(f"Out shape: {out_dim}")
         self.encoder = nn.Sequential(
             nn.Conv1d(out_dim, 64, 3, padding_mode="circular", padding=1),
-            nn.BatchNorm1d(64),
+            # nn.BatchNorm1d(64),
             nn.ReLU(inplace=True),
             nn.Conv1d(64, 128, 3, padding_mode="circular", padding=1),
-            nn.BatchNorm1d(128),
+            # nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
             nn.Conv1d(128, 256, 3, padding_mode="circular", padding=1),
-            nn.BatchNorm1d(256),
+            # nn.BatchNorm1d(256),
             nn.ReLU(inplace=True),
             nn.Conv1d(256, 512, 3, padding_mode="circular", padding=1),
-            nn.BatchNorm1d(512),
+            # nn.BatchNorm1d(512),
             nn.ReLU(inplace=True),
             nn.Conv1d(512, 1024, 3, padding_mode="circular", padding=1),
-            nn.BatchNorm1d(1024),
+            # nn.BatchNorm1d(1024),
             nn.ReLU(inplace=True),
         )
 
         self.decoder_mask = nn.Sequential(
             nn.ConvTranspose2d(1024, 512, 3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm2d(512),
+            # nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
 
             nn.ConvTranspose2d(512, 256, 3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm2d(256),
+            # nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
 
             nn.ConvTranspose2d(256, 128, 3, stride=2, padding=1, output_padding=1),
-            nn.BatchNorm2d(128),
+            # nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
 
             nn.ConvTranspose2d(128, 64, 3, stride=2, padding=1, output_padding=1),
+            # nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),  
-            nn.BatchNorm2d(64),
 
             nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1, output_padding=1),
+            # nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.BatchNorm2d(32),
+
             nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1, output_padding=1),
+            # nn.BatchNorm2d(16), 
             nn.ReLU(inplace=True),
-            nn.BatchNorm2d(16), 
+            
             nn.ConvTranspose2d(16, 8, 3, stride=2, padding=1, output_padding=1),
+            # nn.BatchNorm2d(8), 
             nn.ReLU(inplace=True),
-            nn.BatchNorm2d(8), 
-            nn.Conv2d(8, 1, 3, padding=1)
+            nn.Conv2d(8, 1, 3, padding=1),
         ) 
         self.decoder_coord = nn.Sequential(
             nn.ConvTranspose1d(1024, 512, 3, padding=1),
@@ -116,6 +119,7 @@ class DeepNetwork(nn.Module):
             x = x + self.pos_encoding[:N, :].to(x.device).unsqueeze(0)
         out1, out2 = self.attention(x)
         out1 = out1.view(BS, self.out_size, -1) 
+        # print(f"Out1: {out1.reshape(BS, 2, -1).shape}")
         out_cnn = self.encoder(out1)
         out_coord = out_cnn
         BS, C, L = out_cnn.size()
