@@ -43,11 +43,57 @@ def collate_fn(samples):
     padded_label = torch.tensor(labels)
     return {"input": padded_data, "target": padded_label}
 
-def collate_fn_reconstruct(batch):
+def collate_fn_numpy(batch):
     masks = [item["mask"] for item in batch]
-    inputs = [item["input"] for item in batch]
-    coords = [item["coord"] for item in batch]
-    return {'mask': masks, 'input': inputs, 'coord': coords} 
+    inputs = [item["input"].squeeze(0) if item["input"].dim() > 2 else item["input"] for item in batch]
+    coords = [item["coord"].squeeze(0) if item["coord"].dim() > 2 else item["coord"] for item in batch]
+    
+    # Stack masks (assuming they are all the same size, e.g., [256, 256])
+    masks = torch.stack(masks, dim=0)
+    
+    # Determine the maximum sequence length in the batch
+    max_seq_len = max([input.size(0) for input in inputs])
+    
+    # Pad sequences using edge padding
+    inputs_padded = []
+    coords_padded = []
+    for input_seq in inputs:
+        seq_len = input_seq.size(0)
+        pad_len = max_seq_len - seq_len
+        if pad_len > 0:
+            # Convert to NumPy array
+            input_np = input_seq.numpy()
+            # Pad using edge mode
+            input_padded = np.pad(input_np, ((0, pad_len), (0, 0)), mode='edge')
+            # Convert back to tensor
+            inputs_padded.append(torch.from_numpy(input_padded))
+        else:
+            inputs_padded.append(input_seq)
+    inputs_padded = torch.stack(inputs_padded, dim=0)
+    
+    for coord_seq in coords:
+        seq_len = coord_seq.size(0)
+        pad_len = max_seq_len - seq_len
+        if pad_len > 0:
+            # Convert to NumPy array
+            coord_np = coord_seq.numpy()
+            # Pad using edge mode
+            coord_padded = np.pad(coord_np, ((0, pad_len), (0, 0)), mode='edge')
+            # Convert back to tensor
+            coords_padded.append(torch.from_numpy(coord_padded))
+        else:
+            coords_padded.append(coord_seq)
+    coords_padded = torch.stack(coords_padded, dim=0)
+    
+    # Record the original lengths of sequences
+    input_lengths = torch.tensor([input.size(0) for input in inputs])
+    
+    return {
+        'mask': masks,
+        'input': inputs_padded,
+        'coord': coords_padded,
+        'lengths': input_lengths
+    }
 
 def save_metrics_to_csv(metrics, filepath="accuracies.csv"):
     df = pd.DataFrame([metrics])
@@ -57,7 +103,7 @@ def save_metrics_to_csv(metrics, filepath="accuracies.csv"):
         df.to_csv(filepath, mode="w", header=True, index=False)
 
 
-def evaluate(model, loader, criterion, optimizer, device, classes):
+def evaluate(model, loader, criterion_mask, criterion_coord, device, classes):
     model.eval()
     total_loss = 0
     num_samples = 0
@@ -69,55 +115,35 @@ def evaluate(model, loader, criterion, optimizer, device, classes):
         loader, total=len(loader.dataset), desc="Validation", leave=False
     ) as pbar:
         for data in loader:
-            inputs, targets = data["input"], data["target"]
-            inputs, targets = inputs.to(device), targets.to(device)
+            inputs, masks, coords = data["input"], data["mask"], data["coord"]
+            inputs, masks, coords = inputs.to(device), masks.to(device), coords.to(device)
             # Compute the forward propagation
-            outputs = model(inputs)
-            out = (torch.max(torch.exp(outputs), 1)[1]).data.cpu().numpy()
-            label = targets.data.cpu().numpy()
-            y_pred.extend(out)
-            y_true.extend(label)
-            predicted_outputs = outputs.argmax(dim=1)
-            correct += (predicted_outputs == targets).sum().item()
-            loss = criterion(outputs.squeeze(1), targets)
-            pbar.set_postfix(**{"valid_loss": loss.item()})
+            outputs_mask, outputs_coord = model(inputs.float().to(torch.device("cuda")))
+            loss_mask = criterion_mask(outputs_mask.squeeze(1).float(), masks.float()) 
+            loss_coord = criterion_coord(outputs_coord.float(), inputs.float()) 
+            loss_combined = loss_mask + loss_coord
+            # loss_combined = torch.clamp(loss_combined, min=0)
+
+            pbar.set_postfix(**{"valid_loss": loss_coord.item()})
             pbar.update(inputs.shape[0])
             accuracy = metrics.accuracy_score(
-                targets.detach().cpu().numpy().tolist(),
-                outputs.argmax(dim=1).detach().cpu().numpy().tolist(),
+                masks.flatten().detach().cpu().numpy().tolist(), 
+                (torch.sigmoid(outputs_mask)>0.5).detach().cpu().numpy().astype(int).flatten(),
             )
             f1 = metrics.f1_score(
-                targets.detach().cpu().numpy().tolist(),
-                outputs.argmax(dim=1).detach().cpu().numpy().tolist(),
+                masks.flatten().detach().cpu().numpy().tolist(),
+                (torch.sigmoid(outputs_mask)>0.5).detach().cpu().numpy().astype(int).flatten(),
                 average="micro",
             )
             # Update the metrics
             # We here consider the loss is batch normalized
-            total_loss += inputs.shape[0] * loss.item()
+            total_loss += inputs.shape[0] * loss_combined.item()
             num_samples += inputs.shape[0]
-    y_true_str = [classes[i] for i in y_true]
-    y_pred_str = [classes[i] for i in y_pred]
-    cf_matrix = metrics.confusion_matrix(
-        y_true_str, y_pred_str, labels=classes
-    )
+  
 
-    norm_coeff = np.sum(cf_matrix, axis=1)
-    norm_coeff[norm_coeff == 0] = 1
-    per_class_accuracy = np.diag(cf_matrix) / np.sum(cf_matrix, axis=1)
-    per_class_accuracy_dict = {
-        class_name: acc for class_name, acc in zip(classes, per_class_accuracy)
-    }
-
-    df_cm = pd.DataFrame(
-        cf_matrix / norm_coeff[:, None],
-        index=classes,
-        columns=classes,
-    )
     return total_loss / num_samples, {
         "Accuracy": correct / num_samples,
         "F1": f1,
-        "CM": df_cm,
-        "Per_class_accuracy": per_class_accuracy_dict,
     }
 
 
@@ -189,24 +215,25 @@ def main(args):
 
         train_subsampler = SubsetRandomSampler(train_ids)
         valid_subsampler = SubsetRandomSampler(valid_ids)
+        collate_fct = cfg['Collate']['Name']
+        collate_fct = eval(f"{collate_fct}")
 
         train_loader = torch.utils.data.DataLoader(
             train_data,
             batch_size=cfg["Data"]["Batch_size"],
             sampler=train_subsampler,
-            collate_fn=collate_fn,
+            collate_fn=collate_fct,
         )
         valid_loader = torch.utils.data.DataLoader(
             train_data,
             batch_size=cfg["Data"]["Batch_size"],
             sampler=valid_subsampler,
-            collate_fn=collate_fn,
+            collate_fn=collate_fct,
         )
 
-        model = DeepNetwork(num_classes=len(classes), requires_grad=True)
-
+        model = DeepNetwork(requires_grad=True)
         model.to(device)
-        criterion = utils.get_criterion(cfg)
+        criterion_mask, criterion_coord = utils.get_criterion(cfg)
         optimizer = utils.get_optimizer(cfg, model)
         summary_text = (
             f"Logdir : {logdir}\n"
@@ -220,7 +247,7 @@ def main(args):
             + f"Validation : {valid_loader.dataset}\n"
             + "## Training params :\n\n"
             + f"Model : {model}\n\n"
-            + f"Loss : {criterion}\n"
+            + f"Loss : {criterion_mask, criterion_coord}\n"
             + f"Optimizer : {optimizer}\n"
             + f"Learning rate : {cfg['Optimizer']['lr']}\n"
             + f"Batch_size : {cfg['Data']['Batch_size']}\n"
@@ -277,25 +304,28 @@ def main(args):
             ) as pbar:
                 correct = 0
                 for batch in train_loader:
-                    inputs, targets = batch["input"].to(device), batch[
-                        "target"
-                    ].to(device)
-                    outputs = model(inputs)
-                    predicted_outputs = outputs.argmax(dim=1)
-                    correct += (predicted_outputs == targets).sum().item()
-                    loss = criterion(outputs.squeeze(1), targets)
+                    inputs, masks, coords = batch["input"].to(device), batch[
+                        "mask"].to(device), batch["coord"].to(device)
+                    outputs_mask, outputs_coord = model(inputs.float().to(torch.device("cuda")))
+                    # print(f"\noutput max/min: {outputs_coord.max()}/{outputs_coord.min()}  | target max/min: {inputs.max()}/{inputs.min()} ")
+                    # outputs_mask = torch.sigmoid(outputs_mask)
+                    loss_mask = criterion_mask(outputs_mask.squeeze(1).float(), masks.float()) 
+                    loss_coord = criterion_coord(outputs_coord.float(), inputs.float()) 
+                    total_loss = loss_mask + loss_coord
+                    # total_loss = torch.clamp(total_loss, min=0)
+
                     # tensorboard_writer_train.add_scalar("Loss", loss.item(), global_step)
-                    pbar.set_postfix(**{"loss": loss.item()})
-                    loss.backward()
+                    pbar.set_postfix(**{"loss": loss_mask.item()})
+                    total_loss.backward()
                     optimizer.step()
                     pbar.update(inputs.shape[0])
                     accuracy = metrics.accuracy_score(
-                        targets.detach().cpu().numpy().tolist(),
-                        outputs.argmax(dim=1).detach().cpu().numpy().tolist(),
+                        masks.flatten().detach().cpu().numpy(),
+                        (torch.sigmoid(outputs_mask)>0.5).detach().cpu().numpy().astype(int).flatten(),
                     )
                     f1 = metrics.f1_score(
-                        targets.detach().cpu().numpy().tolist(),
-                        outputs.argmax(dim=1).detach().cpu().numpy().tolist(),
+                        masks.flatten().detach().cpu().numpy(),
+                        (torch.sigmoid(outputs_mask)>0.5).detach().cpu().numpy().astype(int).flatten(),
                         average="micro",
                     )
                     # tensorboard_writer_train.add_scalar("metrics/F1", f1, global_step)
@@ -303,7 +333,7 @@ def main(args):
                     #     "metrics/Accuracy", accuracy, global_step
                     # )
                     logging.info(
-                        f"======= Step: {global_step} - Epoch: {epoch+1} - Train Loss: {loss} - Accuracy: {accuracy} - F1 score: {f1} ======="
+                        f"======= Step: {global_step} - Epoch: {epoch+1} - Train Loss: {total_loss} - Accuracy: {accuracy} - F1 score: {f1} ======="
                     )
                     global_step += 1
                     if (
@@ -314,8 +344,8 @@ def main(args):
                         valid_loss, valid_metrics = evaluate(
                             model,
                             valid_loader,
-                            criterion,
-                            optimizer,
+                            criterion_mask,
+                            criterion_coord,
                             device,
                             classes,
                         )
@@ -324,13 +354,7 @@ def main(args):
                         logging.info(
                             f'======= Step: {global_step} - Epoch: {epoch+1} - Valid Loss: {valid_loss} - F1:{valid_metrics["F1"]} - Accuracy:{valid_metrics["Accuracy"]}======='
                         )
-                        for class_name, acc in valid_metrics[
-                            "Per_class_accuracy"
-                        ].items():
-                            # tensorboard_writer_valid.add_scalar(f"Per_Class_Accuracy/{class_name}", acc, global_step)
-                            logging.info(
-                                f"Accuracy for {class_name}: {acc*100:.2f}%"
-                            )
+                        
 
                         # tensorboard_writer_valid.add_scalar("LR", optimizer.param_groups[0]['lr'], global_step)
                         # tensorboard_writer_valid.add_scalar("Loss", valid_loss, global_step)
@@ -348,27 +372,13 @@ def main(args):
                             "Overall Accuracy": valid_metrics["Accuracy"],
                             "F1 Score": valid_metrics["F1"],
                         }
-                        metrics_data.update(
-                            {
-                                f"Accuracy_{class_name}": acc
-                                for class_name, acc in valid_metrics[
-                                    "Per_class_accuracy"
-                                ].items()
-                            }
-                        )
+                        
                         csv_file_path = os.path.join(logdir, "accuracies.csv")
                         save_metrics_to_csv(metrics_data, csv_file_path)
 
-                        all_true_labels.extend(
-                            valid_metrics["CM"].index.tolist()
-                        )
-                        all_predicted_labels.extend(
-                            valid_metrics["CM"].columns.tolist()
-                        )
-                        valid_metrics["CM"].to_csv(f"CM_.csv", index=False)
-                        if valid_metrics["Accuracy"] > best_results:
+                        if valid_metrics["F1"] > best_results:
                             torch.save(model.state_dict(), best_model_path)
-                            best_results = valid_metrics["Accuracy"]
+                            best_results = valid_metrics["F1"]
                             logging.info(
                                 f"=== Best model saved with Accuracy score: {valid_metrics['Accuracy']} | Best F1-Score: {valid_metrics['F1']} ===="
                             )
