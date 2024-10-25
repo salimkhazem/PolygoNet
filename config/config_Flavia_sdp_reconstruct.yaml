@@ -1,0 +1,33 @@
+--- 
+TrainDataset:
+  cls: "FlaviaDatasetSDP"
+  args:
+    dir_path: "/home/salimkhazem/workspace/phd_thesis/experience_processing_time_contours/results_contours/data/Flavia/Flavia_sdp_None"
+    resize: 512
+    aug_prob: 0.4
+
+ValidDataset:
+  fromsplit: 0.2
+
+Data:
+  Batch_size: 128
+  Shuffle: True 
+
+Model: 
+  Name: "SP-FlaviaSDP-Reconstruct"
+
+Training: 
+  Epochs: 200
+  SEED: 2023
+  Dropout: 0
+
+Optimizer: 
+  Name: "Adam"
+  lr: 0.0001
+  weight_decay: 0.0001
+
+Loss: 
+  Name: "MSECE"
+
+Collate:
+  Name: "collate_fn_numpy"
