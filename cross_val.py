@@ -186,7 +186,7 @@ def main(args):
     if not logdir.exists():
         logdir.mkdir(parents=True)
     # Initialize WandB
-    wandb.init(project="PolygoNet", entity="woordseer")
+    wandb.init(project="PolygoNet", entity="woodseer")
     # wandb.init(project="woodseer", config=cfg, name=args.logname)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     traindataset_cls = cfg["TrainDataset"]["cls"]
