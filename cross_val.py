@@ -1,11 +1,12 @@
-import argparse
 import os
 import sys
-import logging
-import pathlib
-import random
 import yaml
 import torch
+import wandb
+import random
+import logging
+import pathlib
+import argparse
 import numpy as np
 import pandas as pd
 
@@ -139,6 +140,21 @@ def evaluate(model, loader, criterion_mask, criterion_coord, device, classes):
             # We here consider the loss is batch normalized
             total_loss += inputs.shape[0] * loss_combined.item()
             num_samples += inputs.shape[0]
+
+            # Log metrics to WandB
+            wandb.log({
+                "Validation Loss": loss_combined.item(),
+                "Validation Accuracy": accuracy,
+                "Validation F1": f1,
+            })
+            
+            # Log images to WandB (convert to uint8 to avoid type errors)
+            masks_uint8 = masks.mul(255).byte()
+            outputs_mask_uint8 = torch.sigmoid(outputs_mask).mul(255).byte()
+            wandb.log({
+                "Validation Ground Truth": [wandb.Image(mask.cpu().numpy()) for mask in masks_uint8],
+                "Validation Prediction": [wandb.Image(output.cpu().numpy()) for output in outputs_mask_uint8]
+            })
   
 
     return total_loss / num_samples, {
@@ -169,7 +185,9 @@ def main(args):
     logging.info(f"Logging into {logdir}")
     if not logdir.exists():
         logdir.mkdir(parents=True)
-
+    # Initialize WandB
+    wandb.init(project="PolygoNet", entity="woordseer")
+    # wandb.init(project="woodseer", config=cfg, name=args.logname)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     traindataset_cls = cfg["TrainDataset"]["cls"]
     traindataset_args = cfg["TrainDataset"]["args"]
@@ -235,6 +253,8 @@ def main(args):
         model.to(device)
         criterion_mask, criterion_coord = utils.get_criterion(cfg)
         optimizer = utils.get_optimizer(cfg, model)
+        # Log model to WandB
+        wandb.watch(model, log_freq=100)
         summary_text = (
             f"Logdir : {logdir}\n"
             + "## Command \n"
@@ -336,6 +356,12 @@ def main(args):
                         f"======= Step: {global_step} - Epoch: {epoch+1} - Train Loss: {total_loss} - Accuracy: {accuracy} - F1 score: {f1} ======="
                     )
                     global_step += 1
+                    # Log metrics to WandB
+                    wandb.log({
+                        "Train Loss": total_loss.item(),
+                        "Train Accuracy": accuracy,
+                        "Train F1": f1,
+                    })
                     if (
                         global_step
                         % (len(train_data) // (1 * cfg["Data"]["Batch_size"]))
@@ -404,6 +430,9 @@ def main(args):
     print("--------------------------------")
     print(f"Average: {sum(results)/len(results) * 100} %")
     print(f"Max: {max_score} --- FOLD:{results.index(max_score)}")
+
+    # Finish WandB run
+    wandb.finish()
 
 
 if __name__ == "__main__":
